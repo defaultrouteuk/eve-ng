@@ -1,0 +1,76 @@
+#!/usr/nekoware/bin/bash
+#
+# Grep EVE logfile for console port of each router based on RID and last run
+# call TERMINAL w/ tab label
+#
+#
+### BEGIN-of-SETUP
+HOST=192.168.32.58        # IP address of EVE-NG server
+RUID=root                 # EVE-NG user
+RNUM=16                   # Number of devices labelled in the lab e.g. R1
+IRID=1                    # First device ID e.g. R1
+TERMINAL=WINTERM        # Can be ZOC / SECURECRT / WINTERM
+### END-of-SETUP
+
+### APPLICATION BASED ###
+SECURECRT_PATH="/mnt/c/Program Files/VanDyke Software/SecureCRT/SecureCRT.exe"
+ZOC_PATH=/Applications/zoc7.app
+WINTERM_PATH=/usr/sbin/winterm
+#
+### BEST GUESS TERMINAL ###
+LINUX_TERMINAL=
+LINUX_ARGS=
+
+terminal () {
+SECURECRT_ARGS="/N $trid /T /TELNET $HOST $port"
+ZOC_ARGS="/CONNECT=TELNET!$HOST:$port /TABBED /TITLE:$trid"
+WINTERM_ARGS="-t "$trid" -iconic -c telnet $HOST $port"
+}
+
+### Setup password-less SSH login
+# ssh-keygen -t rsa
+# cat ~/.ssh/id_rsa.pub | ssh $RUID@$host 'cat >> .ssh/authorized_keys'
+
+### Copy the eve-ng log file to this machine
+scp $RUID@$HOST:$LOGFILE /tmp/unl_wrapper.txt 1>/dev/null 2>&1
+if [ $0 = 1 ]; then
+   echo "Can\'t copy the logfile from $HOST"
+else
+
+LOGCP=/tmp/unl_wrapper.txt
+PLATFORM=`uname -a | awk '{print $1}'`
+OPLATFORM=`uname -a | awk '{print $4}'`
+LOGFILE=/opt/unetlab/data/Logs/unl_wrapper.txt
+
+if [ $PLATFORM = 'Linux' ]; then
+   PLATFORM='Linux'
+   if [ $OPLATFORM = '#1-Microsoft' ]; then
+      PLATFORM='Windows'
+   fi
+elif [ $PLATFORM = 'IRIX' ]; then
+   PLATFORM='Irix'
+elif [ $PLATFORM = 'Darwin' ]; then
+   PLATFORM='Mac'
+fi
+
+while [ $IRID -le $RNUM ]; do
+   trid="R$IRID"
+   port=`cat $LOGCP | grep "$trid" | awk '{print $8}' | tail -1`
+   terminal
+   case $TERMINAL in
+   WINTERM)
+      $WINTERM_PATH $WINTERM_ARGS
+      ;;
+   SECURECRT)
+      "$SECURECRT_PATH" $SECURECRT_ARGS &
+      ;;
+   ZOC)
+      open -n -a $ZOC_PATH --args $ZOC_ARGS
+      ;;
+   esac
+   ### Uncomment next two lines if you want to see the router ID and port
+   # echo $IRID
+   # echo $port
+   IRID=`expr $IRID + 1`
+done
+fi
