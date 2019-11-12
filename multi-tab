@@ -1,4 +1,4 @@
-#!/usr/nekoware/bin/bash
+#!/bin/bash
 #
 # Grep EVE logfile for console port of each router based on RID and last run
 # call TERMINAL w/ tab label
