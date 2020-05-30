@@ -6,7 +6,7 @@
 #
 ### BEGIN-of-SETUP
 TERMINAL=ZOC              # Can be ZOC / SECURECRT / WINTERM
-HOST=192.168.32.58        # Can be hard coded her or as command line argument for remote EVE-NG host
+HOST=192.168.32.30        # Can be hard coded her or as command line argument for remote EVE-NG host
 RUID=root                 # EVE-NG user (probably root)
 ### END-of-SETUP
 
@@ -15,6 +15,7 @@ SECURECRT_PATH=/mnt/c/Program\ Files/VanDyke\ Software/Clients/SecureCRT.exe
 ZOC_PATH=/Applications/zoc7.app
 WINTERM_PATH=/usr/sbin/winterm
 PUTTY_PATH=/usr/bin/putty
+RDP_PATH="/Applications/Microsoft Remote Desktop.app"
 
 # Read command line input for EVE-NG host
 if [ $# -eq 1 ]; then
@@ -33,10 +34,12 @@ LOGFILE=/opt/unetlab/data/Logs/unl_wrapper.txt
 declare -a INSTANCE=("/opt/vpcsu/bin/vpcs" 
                      "/opt/unetlab/wrappers/iol_wrapper" 
                      "/opt/unetlab/wrappers/qemu_wrapper"
+		     "/opt/unetlab/wrappers/docker_wrapper"
                      )
 
 terminal () {
    # Function to define terminal arguements
+   # SecureCRT tested on Windows10, ZOC launched under MacOS, Winterm under IRIX6.5
    case $TERMINAL in
       SECURECRT)
          $SECURECRT_PATH /N $2 /T /TELNET $HOST $1 &
@@ -45,10 +48,16 @@ terminal () {
          open -n -a $ZOC_PATH --args /CONNECT=TELNET!$HOST:$1 /TABBED /TITLE:$2
          ;;
       WINTERM)
-         $WINTERM_PATH -t $2 -iconic -c telnet $HOST $1
+         $WINTERM_PATH -t $2 -iconic -c telnet $HOST $1 # Deliberate thread hold for speedy close
          ;;
       PUTTY)
          $PUTTY_PATH -telnet $HOST -P $1 -title $2 &
+         ;;
+      VLC)
+         open -n -a $VLC_PATH --args /CONNECT=TELNET!$HOST:$1 /TABBED /TITLE:$2
+         ;;
+      RDP) 
+         open -n -a $RDP_PATH
          ;;
    esac
 }
@@ -59,7 +68,7 @@ terminal () {
 
 ### Copy the eve-ng log file to this machine
 # scp $RUID@$HOST:$LOGFILE /tmp/unl_wrapper.txt 1>/dev/null 2>&1
-ssh $RUID@$HOST "tail -1000 $LOGFILE" > $LOGCP
+ssh $RUID@$HOST "tail -10000 $LOGFILE" > $LOGCP
 
 if [ $0 = 1 ]; then
    echo "Can\'t copy the logfile from $HOST"
@@ -96,12 +105,12 @@ do
          for ((c=0; c<${#SocketArray[@]}; c++))
          do
             # echo "${SocketArray[$c]} ${SocketArray[$(($c+1))]}" # Uncomment for DEBUG echo to screen of array 
-            # nc -z $HOST ${SocketArray[$(($c+1))]} >/dev/null 2>&1; EC=$? 
+            nc -z $HOST ${SocketArray[$(($c+1))]} >/dev/null 2>&1; EC=$? 
 	         cat 2>/dev/null < /dev/null > /dev/tcp/$HOST/${SocketArray[$(($c+1))]}; EC=$? # If this takes too long add 'timeout 1' before 'cat'
-         if [ $EC == 0 ]; then
-            terminal ${SocketArray[$(($c+1))]} ${SocketArray[$c]}
-         fi
-            # Increment array counter
+           if [ $EC == 0 ]; then
+              terminal ${SocketArray[$(($c+1))]} ${SocketArray[$c]}
+           fi
+           # Increment array counter
             c=$(($c+1))
          done
          ;;
@@ -113,26 +122,46 @@ do
             # echo "${SocketArray[$c]} ${SocketArray[$(($c+1))]}" # Uncomment for DEBUG echo to screen of array 
             # nc -z $HOST ${SocketArray[$(($c+1))]} >/dev/null 2>&1; EC=$? 
 	         cat 2>/dev/null < /dev/null > /dev/tcp/$HOST/${SocketArray[$(($c+1))]}; EC=$? # If this takes too long add 'timeout 1' before 'cat'
-         if [ $EC == 0 ]; then
-            terminal ${SocketArray[$(($c+1))]} ${SocketArray[$c]}
-         fi
+            if [ $EC == 0 ]; then
+              terminal ${SocketArray[$(($c+1))]} ${SocketArray[$c]}
+            fi
             # Increment array counter
             c=$(($c+1))
          done
          ;;
       2)
          # QEMU Loop
-         declare -a SocketArray=(`grep -n "${INSTANCE[$i]}" $LOGCP | awk -v OFS='\n' '{print $14,$8}'`)
+         declare -a SocketArray=(`grep -n "${INSTANCE[$i]}" $LOGCP | awk -v OFS='\n' '{print $14,$8,$39,$40,$43,$44}'`)
          for ((c=0; c<${#SocketArray[@]}; c++))
          do
-            # echo "${SocketArray[$c]} ${SocketArray[$(($c+1))]}"  # Uncomment for DEBUG echo to screen of array 
-            # nc -z $HOST ${SocketArray[$(($c+1))]} >/dev/null 2>&1; EC=$?
-	         cat 2>/dev/null < /dev/null > /dev/tcp/$HOST/${SocketArray[$(($c+1))]}; EC=$? # If this takes too long add 'timeout 1' before 'cat'
+	 # echo "${SocketArray[$c]} ${SocketArray[$(($c+1))]} ${SocketArray[$(($c+2))]} ${SocketArray[$(($c+3))]} ${SocketArray[$(($c+4))]}"  # Uncomment for DEBUG echo to screen of array 
+         # nc -z $HOST ${SocketArray[$(($c+1))]} >/dev/null 2>&1; EC=$?
+	 cat 2>/dev/null < /dev/null > /dev/tcp/$HOST/${SocketArray[$(($c+1))]}; EC=$? # If this takes too long add 'timeout 1' before 'cat'
+         # Begin terminal loop 'vnc' or 'ssh' etc
+         if [[ $EC == 0 ]] && [[ ${SocketArray[$(($c+2))]} == "-vnc" ]]; then
+            open -n /Applications/VNC\ Viewer.app --args $HOST:${SocketArray[$(($c+1))]}
+         elif [[ $EC == 0 ]] && [[ ${SocketArray[$(($c+4))]} == "-vnc" ]]; then
+            open -n /Applications/VNC\ Viewer.app --args $HOST:${SocketArray[$(($c+1))]}
+         elif [ $EC == 0 ]; then
+	    terminal ${SocketArray[$(($c+1))]} ${SocketArray[$c]}
+	 fi
+         ## Increment array counter
+         c=$(($c+1))
+         done
+         ;;
+      3)
+         # DOCKER Loop
+         declare -a SocketArray=(`grep -n "${INSTANCE[$i]}" $LOGCP | awk -v OFS='\n' '{print $16,$8}'`)
+         for ((c=0; c<${#SocketArray[@]}; c++))
+         do
+	 # echo "${SocketArray[$c]} ${SocketArray[$(($c+1))]} ${SocketArray[$(($c+2))]} ${SocketArray[$(($c+3))]} ${SocketArray[$(($c+4))]}"  # Uncomment for DEBUG echo to screen of array 
+         # nc -z $HOST ${SocketArray[$(($c+1))]} >/dev/null 2>&1; EC=$?
+	 cat 2>/dev/null < /dev/null > /dev/tcp/$HOST/${SocketArray[$(($c+1))]}; EC=$? # If this takes too long add 'timeout 1' before 'cat'
          if [ $EC == 0 ]; then
-            terminal ${SocketArray[$(($c+1))]} ${SocketArray[$c]}
+		open rdp://$HOST:${SocketArray[$(($c+1))]}
          fi
-            # Increment array counter
-            c=$(($c+1))
+         ## Increment array counter
+         c=$(($c+1))
          done
          ;;
    esac
